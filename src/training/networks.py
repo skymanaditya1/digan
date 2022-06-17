@@ -658,13 +658,17 @@ class Generator(torch.nn.Module):
                 Ts = rearrange(Ts, 'b t c h w -> (b t) c h w')
 
             z_motion = torch.randn(batch_size, 512).to(z.device)
+            # z_motion = torch.zeros_like(z_motion)
+            print(f'Initialized motion latent : {z_motion.mean()}')
 
         ws = self.mapping(z, c, truncation_psi=truncation_psi, truncation_cutoff=truncation_cutoff)
 
         if self.ours:
+            print(f'Going inside if')
             img = self.synthesis(ws, Ts, z_motion, **synthesis_kwargs)
             return img, dT
         else:
+            print(f'Going inside else')
             img = self.synthesis(ws, **synthesis_kwargs)
             return img
 

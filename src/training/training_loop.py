@@ -398,20 +398,20 @@ def training_loop(
                 with open(snapshot_pkl, 'wb') as f:
                     pickle.dump(snapshot_data, f)
 
-        # Evaluate metrics.
-        if (snapshot_data is not None) and (len(metrics) > 0):
-            if rank == 0:
-                project_name = os.path.basename(os.path.dirname(run_dir))
-                print(f'Evaluating metrics for {project_name} ...')
-            for metric in metrics:
-                result_dict = metric_main.calc_metric(metric=metric, G=snapshot_data['G_ema'],
-                    dataset_kwargs=training_set_kwargs, num_gpus=num_gpus, rank=rank, device=device)
-                if rank == 0:
-                    metric_main.report_metric(result_dict, run_dir=run_dir, snapshot_pkl=snapshot_pkl)
+        ## Evaluate metrics. -- disabling evaluating metrics for now
+        # if (snapshot_data is not None) and (len(metrics) > 0):
+        #     if rank == 0:
+        #         project_name = os.path.basename(os.path.dirname(run_dir))
+        #         print(f'Evaluating metrics for {project_name} ...')
+        #     for metric in metrics:
+        #         result_dict = metric_main.calc_metric(metric=metric, G=snapshot_data['G_ema'],
+        #             dataset_kwargs=training_set_kwargs, num_gpus=num_gpus, rank=rank, device=device)
+        #         if rank == 0:
+        #             metric_main.report_metric(result_dict, run_dir=run_dir, snapshot_pkl=snapshot_pkl)
 
-                stats_metrics.update(result_dict.results)
+        #         stats_metrics.update(result_dict.results)
 
-        del snapshot_data # conserve memory
+        # del snapshot_data # not deleting snapshot memory for now
 
         # Collect statistics.
         for phase in phases:

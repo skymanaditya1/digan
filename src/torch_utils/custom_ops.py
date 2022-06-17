@@ -52,9 +52,11 @@ def get_plugin(module_name, sources, **build_kwargs):
 
     # Print status.
     if verbosity == 'full':
-        print(f'Setting up PyTorch plugin "{module_name}"...')
+        # print(f'Setting up PyTorch plugin "{module_name}"...')
+        pass
     elif verbosity == 'brief':
-        print(f'Setting up PyTorch plugin "{module_name}"... ', end='', flush=True)
+        # print(f'Setting up PyTorch plugin "{module_name}"... ', end='', flush=True)
+        pass
 
     try: # pylint: disable=too-many-nested-blocks
         # Make sure we can find the necessary compiler binaries.
@@ -117,9 +119,11 @@ def get_plugin(module_name, sources, **build_kwargs):
 
     # Print status and add to cache.
     if verbosity == 'full':
-        print(f'Done setting up PyTorch plugin "{module_name}".')
+        # print(f'Done setting up PyTorch plugin "{module_name}".')
+        pass
     elif verbosity == 'brief':
-        print('Done.')
+        # print('Done.')
+        pass
     _cached_plugins[module_name] = module
     return module
 

@@ -551,6 +551,41 @@ class ImageFolderDataset(Dataset):
             else:
                 split = 'test'
             imgs = make_imageclip_dataset(path, nframes, class_to_idx, False, split)
+        elif 'how2sign' in path:
+            # print(f'Dataset setting : how2sign')
+            if train:
+                split = 'train'
+            else:
+                split = 'test'
+            imgs = make_imageclip_dataset(path, nframes, class_to_idx, False, split)
+        elif 'vox' in path:
+            # print(f'Dataset settings : voxceleb')
+            if train:
+                split = 'train'
+            else:
+                split = 'test'
+            imgs = make_imageclip_dataset(path, nframes, class_to_idx, False, split)
+        elif 'sky' in path:
+            # print(f'Dataset settings : skytimelapse')
+            if train:
+                split = 'train'
+            else:
+                split = 'test'
+            imgs = make_imageclip_dataset(path, nframes, class_to_idx, False, split)
+        elif 'rainbow' in path:
+            # print(f'Dataset settings : rainbow jelly')
+            if train:
+                split = 'train'
+            else:
+                split = 'test'
+            imgs = make_imageclip_dataset(path, nframes, class_to_idx, False, split)
+        elif 'mnist' in path:
+            # print(f'Dataset settings : mnist')
+            if train:
+                split = 'train'
+            else:
+                split = 'test'
+            imgs = make_imageclip_dataset(path, nframes, class_to_idx, False, split)
         else:
             imgs = make_imageclip_dataset(path, nframes, class_to_idx, False)
 
@@ -558,6 +593,9 @@ class ImageFolderDataset(Dataset):
             raise(RuntimeError("Found 0 images in subfolders of: " + path + "\n"
                                "Supported image extensions are: " +
                                ",".join(IMG_EXTENSIONS)))
+        else:
+            # print(f'Number of images found for training : {len(imgs)}')
+            pass
 
         self.imgs = imgs
         self.classes = classes
@@ -574,23 +612,33 @@ class ImageFolderDataset(Dataset):
         self.to_tensor = transforms.ToTensor()
         random.shuffle(self.shuffle_indices)
 
-        if 'kinetics' in self._path or 'KINETICS' in self._path or 'SKY' in self._path:      
+        if 'kinetics' in self._path or 'KINETICS' in self._path or 'SKY' in self._path \
+            or 'how2sign' in self._path or 'vox' in self._path or 'sky' in self._path \
+                or 'rainbow' in self._path or 'mnist' in self._path:      
             if train:
                 dir_path = os.path.join(self._path, 'train')
             else:
                 dir_path = os.path.join(self._path, 'val')
         
+        # print(f'The dir path is {dir_path}')
+
         if os.path.isdir(self._path):
             self._type = 'dir'
             self._all_fnames = {os.path.relpath(os.path.join(root, fname), start=dir_path) for root, _dirs, files in os.walk(dir_path) for fname in files}        
+            # print(f'The type of dataset is : {self._type}')
         elif self._file_ext(self._path) == '.zip':
             self._type = 'zip'
             self._all_fnames = set(self._get_zipfile().namelist())
         else:
             raise IOError('Path must point to a directory or zip')
 
+        # print(f'Length of fnames is : {len(self._all_fnames)}')
+
+        def file_ext(fname):
+            return os.path.splitext(fname)[1].lower()
+
         PIL.Image.init()
-        self._image_fnames = sorted(fname for fname in self._all_fnames if self._file_ext(fname) in PIL.Image.EXTENSION)
+        self._image_fnames = sorted(fname for fname in self._all_fnames if file_ext(fname) in PIL.Image.EXTENSION)
         if len(self._image_fnames) == 0:
             raise IOError('No image files found in the specified path')
 
@@ -602,7 +650,7 @@ class ImageFolderDataset(Dataset):
         super().__init__(name=name, raw_shape=self._raw_shape, **super_kwargs)
 
     @staticmethod
-    def _file_ext(self, fname):
+    def _file_ext(fname):
         return os.path.splitext(fname)[1].lower()
 
     def _get_zipfile(self):
@@ -613,7 +661,9 @@ class ImageFolderDataset(Dataset):
 
     def _open_file(self, fname):
         if self._type == 'dir':
-            return open(os.path.join(self._path, fname), 'rb')
+            # print(f'The path is : {self._path} and fname is : {fname}')
+            # return open(os.path.join(self._path, fname), 'rb')
+            return open(fname, 'rb')
         if self._type == 'zip':
             return self._get_zipfile().open(fname, 'r')
         return None

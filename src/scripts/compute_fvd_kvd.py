@@ -59,7 +59,7 @@ def main(
     torch.manual_seed(seed)
 
     #################### Load model ########################################
-    print('Loading networks from "%s"...' % network_pkl)
+    # print('Loading networks from "%s"...' % network_pkl)
     device = torch.device('cuda')
     with dnnlib.util.open_url(network_pkl) as f:
         G = legacy.load_network_pkl(f)['G_ema'].to(device).eval() # type: ignore
@@ -76,7 +76,7 @@ def main(
     #################### Compute FVD ###############################
     fvds = []
     kvds = []
-    pbar = tqdm(total=n_trials)
+    # pbar = tqdm(total=n_trials)
 
     for _ in range(n_trials):
         test_iterator = iter(torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True))
@@ -84,15 +84,15 @@ def main(
         fvds.append(fvd)
         kvds.append(kvd)
 
-        pbar.update(1)
+        # pbar.update(1)
         fvd_mean = np.mean(fvds)
         kvd_mean = np.mean(kvds)
         fvd_std = np.std(fvds)
         kvd_std = np.std(kvds)
 
-        pbar.set_description(f"FVD {fvd_mean:.2f} +/- {fvd_std:.2f}, KVD {kvd_mean:.2f} +/- {kvd_std:.2f}")
+        # pbar.set_description(f"FVD {fvd_mean:.2f} +/- {fvd_std:.2f}, KVD {kvd_mean:.2f} +/- {kvd_std:.2f}")
 
-    pbar.close()
+    # pbar.close()
     print(f"Final FVD {fvd_mean:.2f} +/- {fvd_std:.2f}")
     print(f"Final KVD {kvd_mean:.2f} +/- {kvd_std:.2f}")
 

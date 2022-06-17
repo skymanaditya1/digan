@@ -50,10 +50,11 @@ def is_git_repo(path: os.PathLike):
 
 def create_project_dir(project_dir: os.PathLike, objects_to_copy: List[os.PathLike], symlinks_to_create: List[os.PathLike]):
     if is_git_repo(os.getcwd()) and are_there_uncommitted_changes():
-        if click.confirm("There are uncommited changes. Continue?", default=False):
-            print('Ok...')
-        else:
-            raise PermissionError("Cannot created a dir when there are uncommited changes")
+        # if click.confirm("There are uncommited changes. Continue?", default=True):
+        #     print('Ok...')
+        # else:
+        #     raise PermissionError("Cannot created a dir when there are uncommited changes")
+        pass
 
     if os.path.exists(project_dir):
         if click.confirm(f'Dir {project_dir} already exists. Remove it?', default=False):

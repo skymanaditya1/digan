@@ -1,9 +1,10 @@
 env:
-  python_bin: "python"
+  # python_bin: "python"
+  python_bin: "/home2/aditya1/miniconda3/bin/python"
   base_project_dir: ${hydra:runtime.cwd}
   before_train_commands: []
-  torch_extensions_dir: "/tmp/torch_extensions"
-  datasets_dir: "/data"
+  torch_extensions_dir: "tmp/torch_extensions"
+  datasets_dir: "data"
   objects_to_copy:
     - ${env.base_project_dir}/src
     - ${env.base_project_dir}/configs
@@ -12,10 +13,10 @@ env:
   symlinks_to_create:
     - ${env.base_project_dir}/data
 
-num_gpus: 8
+num_gpus: 2
 dataset:
   source_path: ${env.datasets_dir}/${dataset.name}
-  target_path: /data/${dataset.name}
+  target_path: data/${dataset.name}
 print_only: false
 
 project_release_dir:
@@ -28,7 +29,7 @@ train_args:
   data: ${dataset.target_path}
   gpus: ${num_gpus}
   cfg: auto
-  snap: 100
+  snap: 50
   diffaugment: color,translation
   cond: false
 
