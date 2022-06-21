@@ -14,11 +14,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms.functional as TVF
-# import skvideo
-
-# skvideo.setFFmpegPath('/home2/aditya1/miniconda3/lib/python3.9/site-packages/ffmpeg')
-
-# import skvideo.io
 
 import skimage
 import skimage.io
@@ -205,24 +200,6 @@ def generate_videos(
 
         target_images = load_target_images(dirname)
 
-        # grid_size = (int(math.sqrt(num_videos)), int(math.sqrt(num_videos)))
-
-        # Compute w stats.
-        # z_samples = np.random.RandomState(123).randn(w_avg_samples, G.z_dim)
-        # w_samples = G.mapping(torch.from_numpy(z_samples).to(device), None)  # [N, L, C]
-        # w_samples = w_samples[:, :1, :].cpu().numpy().astype(np.float32)       # [N, 1, C]
-        # w_avg = np.mean(w_samples, axis=0, keepdims=True)      # [1, 1, C]
-        # w_std = (np.sum((w_samples - w_avg) ** 2) / w_avg_samples) ** 0.5
-
-        # w_opt = torch.tensor(w_avg, dtype=torch.float32, device=device, requires_grad=True) # pylint: disable=not-callable
-        # w_opt = w_opt.repeat(num_videos, G.num_ws, 1).detach().requires_grad_(True) # [num_videos, num_ws, w_dim]
-
-        # motion_z_opt = torch.randn([1, 512], device=device, requires_grad=True) # 1 x 512
-        # motion_z_opt.requires_grad_(True)
-
-        # optimizer = torch.optim.Adam([w_opt] + [motion_z_opt], betas=(0.9, 0.999), lr=initial_learning_rate)
-        # optimizer = torch.optim.Adam([w_opt], betas=(0.9, 0.999), lr=initial_learning_rate)
-
         z = torch.randn([1, G.z_dim], device=device, requires_grad=True) # 1 x 512
         z_motion = torch.randn([1, 512], device=device, requires_grad=True) # 1 x 512
 
@@ -230,22 +207,9 @@ def generate_videos(
 
         target_images = torch.vstack(target_images).to(device)
 
-        # ws grad : torch.Size([1, 13, 512]), Ts grad torch.Size([16, 1, 1, 1]), z_motion: torch.Size([1, 512]), img: torch.Size([16, 3, 128, 128])
-        # num_steps = 1000
-        # save_steps = 50
         for step in tqdm(range(num_steps)):
-            # timesteps=16
-
-            # batch_size = w_opt.size(0)
-            # Ts = torch.linspace(0, 1., steps=timesteps).view(timesteps, 1, 1).unsqueeze(0)
-            # Ts = Ts.repeat(batch_size, 1, 1, 1).view(-1, 1, 1, 1).to(w_opt.device)
-
-            # w_noise = torch.randn_like(w_opt) * 0.01
-            # ws = w_opt + w_noise
-
             synth_images = G(z, None, z_motion=z_motion, timesteps=timesteps, noise_mode='const')[0]
-            # synth_images = G.synthesis(ws, Ts, z_motion=motion_z_opt)
-
+            
             if loss_type == 'perceptual':
                 # Features for synth images.
                 synth_images = (synth_images * 0.5 + 0.5) * 255.0
@@ -262,9 +226,6 @@ def generate_videos(
                 print(f'Using L1 distance loss')
                 loss = torch.abs(target_images - synth_images).mean()
             
-            # check gradients of z and z_motion 
-            # print(f'w_opt gradients : {w_opt.requires_grad}, motion_z_opt gradients : {motion_z_opt.requires_grad}, synth_images gradients: {synth_images.requires_grad}')
-
             # Step
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
