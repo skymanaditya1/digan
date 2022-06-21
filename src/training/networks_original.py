@@ -48,9 +48,6 @@ def modulated_conv2d(
         flip_weight=True,  # False = convolution, True = correlation (matches torch.nn.functional.conv2d).
         fused_modconv=True,  # Perform modulation, convolution, and demodulation as a single fused operation?
 ):
-    # hardcoding the upsampling factor -- by default it uses 1
-    up = 2
-    print(f'The upsampling factor is : {up}')
     batch_size = x.shape[0]
     out_channels, in_channels, kh, kw = weight.shape
     misc.assert_shape(weight, [out_channels, in_channels, kh, kw])  # [OIkk]
@@ -591,7 +588,6 @@ class SynthesisNetwork(torch.nn.Module):
             setattr(self, f'b{res}', block)
 
     def forward(self, ws, Ts=None, z_motion=None, **block_kwargs):
-        print(f'image resolution inside the synthesis network : {self.img_resolution}, {self.img_resolution_log2}')
         block_ws = []
         with torch.autograd.profiler.record_function('split_ws'):
             misc.assert_shape(ws, [None, self.num_ws, self.w_dim])
@@ -632,14 +628,8 @@ class Generator(torch.nn.Module):
         self.z_dim = z_dim
         self.c_dim = c_dim
         self.w_dim = w_dim
-        # self.img_resolution = img_resolution
-        self.img_resolution = 256 # hard-coded for now
-        print(f'The output image resolution is : {self.img_resolution}')
+        self.img_resolution = img_resolution
         self.img_channels = img_channels
-        print(' --- synthesis --- ')
-        print(synthesis_kwargs)
-        print(' --- mapping --- ')
-        print(mapping_kwargs)
         self.synthesis = SynthesisNetwork(w_dim=w_dim, img_resolution=img_resolution, img_channels=img_channels,
                                           cfg=cfg, **synthesis_kwargs)
         self.num_ws = self.synthesis.num_ws
@@ -649,11 +639,9 @@ class Generator(torch.nn.Module):
         self.dist1 = torch.distributions.beta.Beta(2., 1., validate_args=None)
         self.dist2 = torch.distributions.beta.Beta(1., 2., validate_args=None)
 
-    def forward(self, z, c, z_motion=None, timesteps=None, truncation_psi=1, truncation_cutoff=None, **synthesis_kwargs):
+    def forward(self, z, c, timesteps=None, truncation_psi=1, truncation_cutoff=None, **synthesis_kwargs):
 
-        # print(f'generator resolution inside the forward function : {self.img_resolution}')
-
-        Ts = None
+        Ts = z_motion = None
         if timesteps != None:
             batch_size = z.size(0)
             if timesteps > 2:
@@ -669,16 +657,12 @@ class Generator(torch.nn.Module):
                 dT = Ts[:, 1] - Ts[:, 0]
                 Ts = rearrange(Ts, 'b t c h w -> (b t) c h w')
 
-            if z_motion is None:
-                print(f'The value of z_motion is None')
-                z_motion = torch.randn(batch_size, 512).to(z.device)
+            z_motion = torch.randn(batch_size, 512).to(z.device)
 
         ws = self.mapping(z, c, truncation_psi=truncation_psi, truncation_cutoff=truncation_cutoff)
 
         if self.ours:
             img = self.synthesis(ws, Ts, z_motion, **synthesis_kwargs)
-            # print(f'ws grad : {ws.requires_grad}, Ts grad {Ts.requires_grad}, z_motion: {z_motion.requires_grad}, img: {img.requires_grad}')
-            # print(f'ws grad : {ws.shape}, Ts grad {Ts.shape}, z_motion: {z_motion.shape}, img: {img.shape}')
             return img, dT
         else:
             img = self.synthesis(ws, **synthesis_kwargs)

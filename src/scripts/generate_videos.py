@@ -108,8 +108,15 @@ def generate_videos(
     device = torch.device('cuda')
     with dnnlib.util.open_url(network_pkl) as f:
         G = legacy.load_network_pkl(f)['G_ema'].to(device).eval() # type: ignore
+
+        # set the generator image resolution explicitly 
+        # G.img_resolution = 256
+        # G.synthesis.img_resolution = 256
+        print(f'Generator image resolution is : {G.img_resolution}')
+
         G.forward = Generator.forward.__get__(G, Generator)
         print("Done. ")
+        assert not True
 
     os.makedirs(outdir, exist_ok=True)
 

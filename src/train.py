@@ -116,7 +116,7 @@ def setup_training_loop_kwargs(
         args.training_set_kwargs = dnnlib.EasyDict(class_name='training.dataset.UCF101Wrapper', root=data, use_labels=True, train=True, resolution=128, path=data, xflip=True)
         args.data_loader_kwargs = dnnlib.EasyDict(pin_memory=False, num_workers=4, prefetch_factor=2)
     else:
-        resolution = 128 # changing the resolution here -- default was 128
+        resolution = 256 # changing the resolution here -- default was 128
         print(f'The path for the data is (from inside the train class): {data}')
         print(f'Input image resolution is : {resolution}')
         args.training_set_kwargs = dnnlib.EasyDict(class_name='training.dataset.ImageFolderDataset', path=data, use_labels=True, resolution=resolution, max_size=None, xflip=True, train=True)
@@ -183,7 +183,7 @@ def setup_training_loop_kwargs(
         spec.ref_gpus = gpus
         res = args.training_set_kwargs.resolution
         # spec.mb = max(min(gpus * min(4096 // res, 32), 64), gpus) # keep gpu memory consumption at bay
-        spec.mb = 16 # hardcoding the batch size for now
+        spec.mb = 4 # hardcoding the batch size for now
         spec.mbstd = min(spec.mb // gpus, 4) # other hyperparams behave more predictably if mbstd group size remains fixed
         spec.fmaps = 1 if res >= 512 else 0.5
         spec.lrate = 0.002 if res >= 1024 else 0.0025

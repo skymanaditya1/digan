@@ -22,11 +22,19 @@ def load_network_pkl(f, force_fp16=False):
 
     # Legacy TensorFlow pickle => convert.
     if isinstance(data, tuple) and len(data) == 3 and all(isinstance(net, _TFNetworkStub) for net in data):
+        print(f'Loading legacy tensorflow pickle')
         tf_G, tf_D, tf_Gs = data
         G = convert_tf_generator(tf_G)
         D = convert_tf_discriminator(tf_D)
         G_ema = convert_tf_generator(tf_Gs)
         data = dict(G=G, D=D, G_ema=G_ema)
+
+    print(f'Not loading legacy tensorflow pickle')
+
+    data['training_set_kwargs']['resolution'] = 256
+    # print(data)
+
+    # assert not True
 
     # Add missing fields.
     if 'training_set_kwargs' not in data:
@@ -46,6 +54,7 @@ def load_network_pkl(f, force_fp16=False):
         for key in ['G', 'D', 'G_ema']:
             old = data[key]
             kwargs = copy.deepcopy(old.init_kwargs)
+            print(f'Inside fp16')
             if key.startswith('G'):
                 kwargs.synthesis_kwargs = dnnlib.EasyDict(kwargs.get('synthesis_kwargs', {}))
                 kwargs.synthesis_kwargs.num_fp16_res = 4
@@ -66,6 +75,7 @@ class _TFNetworkStub(dnnlib.EasyDict):
 
 class _LegacyUnpickler(pickle.Unpickler):
     def find_class(self, module, name):
+        # print(f'{module}, {name}')
         if module == 'dnnlib.tflib.network' and name == 'Network':
             return _TFNetworkStub
         return super().find_class(module, name)
@@ -160,6 +170,7 @@ def convert_tf_generator(tf_G):
         match = re.fullmatch(r'ToRGB_lod(\d+)/(.*)', name)
         if match:
             r = kwargs.img_resolution // (2 ** int(match.group(1)))
+            print(f'Resolution inside the legacy load function of generator : {r}')
             tf_params[f'{r}x{r}/ToRGB/{match.group(2)}'] = value
             kwargs.synthesis.kwargs.architecture = 'orig'
     #for name, value in tf_params.items(): print(f'{name:<50s}{list(value.shape)}')
@@ -257,6 +268,7 @@ def convert_tf_discriminator(tf_D):
         match = re.fullmatch(r'FromRGB_lod(\d+)/(.*)', name)
         if match:
             r = kwargs.img_resolution // (2 ** int(match.group(1)))
+            print(f'Loading pretrained model disc, resolution : {r}')
             tf_params[f'{r}x{r}/FromRGB/{match.group(2)}'] = value
             kwargs.architecture = 'orig'
     #for name, value in tf_params.items(): print(f'{name:<50s}{list(value.shape)}')

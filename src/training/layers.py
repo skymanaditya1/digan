@@ -209,6 +209,9 @@ class CoordFuser(nn.Module):
             out = torch.cat([out, self._fourier_embs_cache], dim=1)
         else:
             raw_embs = []
+            # set the output image size -- 256
+            img_size = 256
+            print(f'The coord image size has been set to : {img_size}')
             raw_coords = generate_coords(batch_size, img_size, x.device)  # [batch_size, coord_dim, img_size, img_size]
 
             if self.use_raw_coords:
@@ -298,6 +301,8 @@ def generate_coords(batch_size: int, img_size: int, device='cpu', align_corners:
     - upper left corner: coords[0, 0] = (-1, -1)
     - upper right corner: coords[img_size - 1, img_size - 1] = (1, 1)
     """
+    img_size = 256 # this is the size of the output image
+    print(f'Generating coordinates -- output image dimension : {img_size}')
     if align_corners:
         row = torch.linspace(-1, 1, img_size, device=device).float()  # [img_size]
     else:
