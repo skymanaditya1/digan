@@ -136,6 +136,7 @@ def read_target_image_features(target_images_dir, vgg16, device):
 @click.option('--dir_videos', help='Directory of all videos', type=str, required=False, metavar='DIR')
 @click.option('--task', help='Type of inversion task', default=None, required=False)
 @click.option('--save_target', help='Save target images', default=False, type=bool, metavar='BOOL')
+@click.option('--extrapolate_frames', type=int, help='Frames required for extrapolation', default=4, show_default=True)
 
 def generate_videos(
     ctx: click.Context,
@@ -150,7 +151,8 @@ def generate_videos(
     loss_type: str,
     dir_videos: str,
     task: str,
-    save_target: bool
+    save_target: bool,
+    extrapolate_frames: int
 ):
     w_avg_samples = 10000
     num_videos = 1
@@ -191,6 +193,16 @@ def generate_videos(
     dirs = glob(dir_videos + '/*')
     print(f'Total number of dirs to process : {len(dirs)}')
 
+    if task == 'sparse':
+        # create the hidden pixels for the task of sparse inpainting 
+        max_value = 128*128*timesteps
+        indices = torch.randperm(max_value) 
+        assert len(indices) == max_value
+
+        sparse_sampling_factor = 0.75
+        hidden_indices = indices[:int(sparse_sampling_factor*max_value)]
+        loss_indices = indices[int(sparse_sampling_factor*max_value):]
+
     for dirname in tqdm(dirs):
         # create the outdir from the input dir 
         current_outdir = osp.join(outdir, osp.basename(dirname))
@@ -225,10 +237,9 @@ def generate_videos(
                 loss = (target_features - synth_features).square().mean()
             else:
                 print(f'Using L1 distance loss')
-
+                print(f'Task : {task}')
                 # for inpainting (upper-half context given -- the images need to be lower-half masked)
                 if task == 'inpainting':
-                    print(f'Task : {task}')
                     # inpainting is an inversion task 
                     # input frames shape -> num_frames x channels x image_dim x image_dim
                     print(f'Shapes before inpainting : target - {target_images.shape}, {synth_images.shape}')
@@ -237,12 +248,44 @@ def generate_videos(
                     # print(f'Unique synth values in task : {torch.unique(synth_images)}')
 
                     # mask the lower half of the target image - set to white (255)
-                    target_lower_masked = target_images.clone()
-                    target_lower_masked[:,64:] = 1.0
+                    target_modified = target_images.clone()
+                    target_modified[:,64:] = 1.0
 
                     # compare the top half of target with top half of synthesized 
                     # L1 distance loss
-                    loss = torch.abs(target_lower_masked[:, :64] - synth_images[:, :64]).mean()
+                    loss = torch.abs(target_modified[:, :64] - synth_images[:, :64]).mean()
+
+                elif task == 'extrapolation':
+                    # in extrapolation, only the first four frames are used as the input
+                    print(f'Using {extrapolate_frames} frames to extrapolate')
+                    target_modified = target_images[:extrapolate_frames*3]
+
+                    # compute the L1 loss
+                    loss = torch.abs(target_modified - synth_images[:extrapolate_frames*3]).mean()
+
+                elif task == 'interpolation':
+                    # in interpolation, the first and the last frame would be used as the context
+                    print(f'Using the first and the last frame for interpolation')
+
+                    target_modified = torch.vstack([target_images[:3], target_images[-3:]])
+
+                    # compute the L1 loss
+                    loss = torch.abs(target_modified - torch.vstack([synth_images[:3], synth_images[-3:]])).mean()
+
+                elif task == 'sparse':
+                    # in the optimization objective, the supervision is only from (1-sparse_sampling_factor) of the image
+                    # target_images.shape -> (25*3) x 128 x 128 -> n x 3
+                    target_modified = target_images.view(-1, 3, 128, 128).permute(0, 2, 3, 1).reshape(-1, 3)
+                    synth_modified = synth_images.view(-1, 3, 128, 128).permute(0, 2, 3, 1).reshape(-1, 3)
+
+                    # compute the loss on the pixels corresponding to loss_indices 
+                    loss = torch.abs(target_modified[loss_indices] - synth_modified[loss_indices]).mean()
+                    
+                    # set the pixels corresponding to hidden_indices to white (1)
+                    target_modified[hidden_indices] = 1
+
+                    # initial -> (25*128*128) x 3 -> (25*3) x 128 x 128
+                    target_modified = target_modified.view(-1, 128, 128, 3).permute(0, 3, 1, 2).reshape(-1, 128, 128)
 
                 else:
                     # Computing the normal L1 loss
@@ -255,7 +298,7 @@ def generate_videos(
 
             print(loss)
 
-            def save_step(synth_images, target_images, target_lower_masked, steps, current_outdir, task):
+            def save_step(synth_images, target_images, target_modified, steps, current_outdir, task):
                 frame_dims = synth_images.shape[-1]
 
                 print(f'Synth images shape : {synth_images.shape}')
@@ -268,6 +311,8 @@ def generate_videos(
                 current_output_dir = osp.join(current_outdir, str(steps).zfill(4))
                 print(f'Saving images to dir : {current_output_dir}')
 
+                save_as_frames(current_output_dir, synth_images, 'synth')
+
                 # save the target images as well
                 if save_target:
                     # print(f'Unique target_images values : {torch.unique(target_images)}')
@@ -278,20 +323,18 @@ def generate_videos(
                     # save the original target image and the masked image 
                     save_as_frames(current_output_dir, target_images, 'target')
 
-                    if task == 'inpainting':
+                    if task is not None:
                         # print(f'Unique target_lower_masked values : {torch.unique(target_lower_masked)}')
-                        target_lower_masked.clamp(-1, 1)
-                        target_lower_masked = target_lower_masked.view(-1, 3, frame_dims, frame_dims)
-                        target_lower_masked = target_lower_masked.permute(0, 2, 3, 1).detach().cpu()
+                        target_modified.clamp(-1, 1)
+                        target_modified = target_modified.view(-1, 3, frame_dims, frame_dims)
+                        target_modified = target_modified.permute(0, 2, 3, 1).detach().cpu()
 
-                        save_as_frames(current_output_dir, target_lower_masked, 'target_lower_masked')
-
-                save_as_frames(current_output_dir, synth_images, 'synth')
+                        save_as_frames(current_output_dir, target_modified, 'target_modified')
 
             if (step+1)%save_steps == 0:
                 # save synth_images
-                if task == 'inpainting':
-                    save_step(synth_images, target_images, target_lower_masked, (step+1), current_outdir, task)
+                if task is not None:
+                    save_step(synth_images, target_images, target_modified, (step+1), current_outdir, task)
                 else:
                     save_step(synth_images, target_images, None, (step+1), current_outdir, task)
 
