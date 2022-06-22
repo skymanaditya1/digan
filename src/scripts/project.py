@@ -52,8 +52,6 @@ def interpolate_points(p1, p2, num_interpolate_points):
 
 # method to generate the latent vectors in the dimension required by digan generator 
 def generate_latents(num_videos, G, device):
-    # z_values = torch.randn(num_videos, G.z_dim, device=device)
-    # probably this is generating inference on the gpu
     print(f'Generator latent dimension is : {G.z_dim}')
     p1 = torch.randn(G.z_dim, device='cpu')
     p2 = torch.randn(G.z_dim, device='cpu')
@@ -68,11 +66,7 @@ def generate_latents(num_videos, G, device):
 
 # method to generate the latent vectors in the dimension required by digan generator 
 def generate_latents_zeros_ones(num_videos, G, device):
-    # z_values = torch.randn(num_videos, G.z_dim, device=device)
-    # probably this is generating inference on the gpu
     print(f'Generator latent dimension is : {G.z_dim}')
-    # p1 = torch.zeros(G.z_dim, device='cpu')
-    # p2 = torch.ones(G.z_dim, device='cpu')
     p1 = torch.randn(G.z_dim, device='cpu')
     p_ = torch.randn(G.z_dim, device='cpu')
     p2 = p_.clone()
@@ -86,10 +80,10 @@ def generate_latents_zeros_ones(num_videos, G, device):
 
     return z_tensors
 
-def save_as_frames(dir_path, frames):
+def save_as_frames(dir_path, frames, type):
     os.makedirs(dir_path, exist_ok=True)
     for index, frame in enumerate(frames):
-        filepath = osp.join(dir_path, str(index).zfill(3) + '.png')
+        filepath = osp.join(dir_path, str(index).zfill(3) + '_{}.png'.format(type))
 
         skimage.io.imsave(filepath, frame)
 
@@ -132,27 +126,31 @@ def read_target_image_features(target_images_dir, vgg16, device):
 @click.pass_context
 @click.option('--network_pkl', help='Network pickle filename', required=True)
 @click.option('--timesteps', type=int, help='Timesteps', default=16, show_default=True)
-@click.option('--num_videos', type=int, help='Number of images to generate', default=100, show_default=True)
+# @click.option('--num_videos', type=int, help='Number of images to generate', default=100, show_default=True)
 @click.option('--seed', type=int, help='Random seed', default=42, metavar='DIR')
 @click.option('--outdir', help='Where to save the output images', type=str, required=True, metavar='DIR')
-@click.option('--target_images_dir', help='Directory of videos', type=str, required=False, metavar='DIR')
+# @click.option('--target_images_dir', help='Directory of videos', type=str, required=False, metavar='DIR')
 @click.option('--num_steps', type=int, help='Optimization steps', default=1000, show_default=True)
 @click.option('--save_steps', type=int, help='Steps after which to save', default=50, show_default=True)
 @click.option('--loss_type', help='Type of loss function to optimize', default='perceptual', required=True)
 @click.option('--dir_videos', help='Directory of all videos', type=str, required=False, metavar='DIR')
+@click.option('--task', help='Type of inversion task', default=None, required=False)
+@click.option('--save_target', help='Save target images', default=False, type=bool, metavar='BOOL')
 
 def generate_videos(
     ctx: click.Context,
     network_pkl: str,
     timesteps: int,
-    num_videos: int,
+    # num_videos: int,
     seed: int,
     outdir: str,
-    target_images_dir,
+    # target_images_dir,
     num_steps: int,
     save_steps: int,
     loss_type: str,
-    dir_videos: str
+    dir_videos: str,
+    task: str,
+    save_target: bool
 ):
     w_avg_samples = 10000
     num_videos = 1
@@ -207,6 +205,9 @@ def generate_videos(
 
         target_images = torch.vstack(target_images).to(device)
 
+        # normalize the range of target images (current -> [0, 1], required -> [-1, 1])
+        target_images = (target_images - 0.5) / 0.5 # [-1, 1]
+
         for step in tqdm(range(num_steps)):
             synth_images = G(z, None, z_motion=z_motion, timesteps=timesteps, noise_mode='const')[0]
             
@@ -224,7 +225,28 @@ def generate_videos(
                 loss = (target_features - synth_features).square().mean()
             else:
                 print(f'Using L1 distance loss')
-                loss = torch.abs(target_images - synth_images).mean()
+
+                # for inpainting (upper-half context given -- the images need to be lower-half masked)
+                if task == 'inpainting':
+                    print(f'Task : {task}')
+                    # inpainting is an inversion task 
+                    # input frames shape -> num_frames x channels x image_dim x image_dim
+                    print(f'Shapes before inpainting : target - {target_images.shape}, {synth_images.shape}')
+
+                    # print(f'Unique target values in task : {torch.unique(target_images)}')
+                    # print(f'Unique synth values in task : {torch.unique(synth_images)}')
+
+                    # mask the lower half of the target image - set to white (255)
+                    target_lower_masked = target_images.clone()
+                    target_lower_masked[:,64:] = 1.0
+
+                    # compare the top half of target with top half of synthesized 
+                    # L1 distance loss
+                    loss = torch.abs(target_lower_masked[:, :64] - synth_images[:, :64]).mean()
+
+                else:
+                    # Computing the normal L1 loss
+                    loss = torch.abs(target_images - synth_images).mean()
             
             # Step
             optimizer.zero_grad(set_to_none=True)
@@ -233,25 +255,45 @@ def generate_videos(
 
             print(loss)
 
-            def save_step(synth_images, steps, outdir):
+            def save_step(synth_images, target_images, target_lower_masked, steps, current_outdir, task):
                 frame_dims = synth_images.shape[-1]
 
                 print(f'Synth images shape : {synth_images.shape}')
 
                 # the synth images need to be normalized using the respective code
-
+                synth_images.clamp(-1, 1)
                 synth_images = synth_images.view(-1, 3, frame_dims, frame_dims) # time_steps x 3 x 128 x 128
                 synth_images = synth_images.permute(0, 2, 3, 1).detach().cpu() # time_steps x 128 x 128 x 3
 
                 current_output_dir = osp.join(current_outdir, str(steps).zfill(4))
                 print(f'Saving images to dir : {current_output_dir}')
 
-                save_as_frames(current_output_dir, synth_images)
+                # save the target images as well
+                if save_target:
+                    # print(f'Unique target_images values : {torch.unique(target_images)}')
+                    target_images.clamp(-1, 1)
+                    target_images = target_images.view(-1, 3, frame_dims, frame_dims)
+                    target_images = target_images.permute(0, 2, 3, 1).detach().cpu()
+
+                    # save the original target image and the masked image 
+                    save_as_frames(current_output_dir, target_images, 'target')
+
+                    if task == 'inpainting':
+                        # print(f'Unique target_lower_masked values : {torch.unique(target_lower_masked)}')
+                        target_lower_masked.clamp(-1, 1)
+                        target_lower_masked = target_lower_masked.view(-1, 3, frame_dims, frame_dims)
+                        target_lower_masked = target_lower_masked.permute(0, 2, 3, 1).detach().cpu()
+
+                        save_as_frames(current_output_dir, target_lower_masked, 'target_lower_masked')
+
+                save_as_frames(current_output_dir, synth_images, 'synth')
 
             if (step+1)%save_steps == 0:
                 # save synth_images
-                save_step(synth_images, (step+1), outdir)
-
+                if task == 'inpainting':
+                    save_step(synth_images, target_images, target_lower_masked, (step+1), current_outdir, task)
+                else:
+                    save_step(synth_images, target_images, None, (step+1), current_outdir, task)
 
         # save image grid if saving as grid is required
         # save_image_grid(synth_images.detach().cpu().numpy(), os.path.join(outdir, f'generate_videos.gif'), drange=[-1, 1], grid_size=grid_size)

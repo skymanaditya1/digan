@@ -217,7 +217,7 @@ class Conv2dLayer(torch.nn.Module):
 
 # ----------------------------------------------------------------------------
 
-@persistence.persistent_class
+# @persistence.persistent_class
 class MappingNetwork(torch.nn.Module):
     def __init__(self,
                  z_dim,  # Input latent (Z) dimensionality, 0 = no latent.
